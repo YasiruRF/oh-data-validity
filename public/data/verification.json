@@ -1,0 +1,39 @@
+{
+ "rows": 500,
+ "monthsInFile": 28,
+ "monthRange": [
+  "2012-02",
+  "2014-10"
+ ],
+ "uniqueCells": 253,
+ "duplicateKeys": 0,
+ "nulls": 0,
+ "nonZeroRows": 19,
+ "zeroShare": 0.962,
+ "totalFishingHours": 302.80010000000004,
+ "totalLonglineHours": 67.1406,
+ "lkaAllZero": true,
+ "longlineExceedsFishing": 0,
+ "onLandRows": 22,
+ "onLandNonZeroRows": 0,
+ "outsideEnvGridRows": 0,
+ "outlierFence": 40.61795,
+ "outlierRows": 2,
+ "topCell": {
+  "month": "2014-01",
+  "lat": 7.05,
+  "lon": 79.75,
+  "hours": 144.028
+ },
+ "topCellShare": 0.47565373987657195,
+ "monthsMissingFromRange": [
+  "2012-01",
+  "2012-04",
+  "2012-05",
+  "2012-07",
+  "2012-11",
+  "2013-12",
+  "2014-11",
+  "2014-12"
+ ]
+}
