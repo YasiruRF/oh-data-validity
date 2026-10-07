@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { ArrowCounterClockwise, Clock, FishSimple, Funnel, Stack } from "@phosphor-icons/react";
 import type { Settings, TimeMode } from "./Dashboard";
+import { Chip, NumberField, RangeField, Section, Segmented, Switch } from "./ui";
 import { DataBundle, fmt, resolutionLabel } from "@/lib/data";
 import { CRITERION_ORDER, Criteria, Criterion, Metric, PRESET_LABELS, PresetId } from "@/lib/habitat";
 
@@ -15,45 +16,24 @@ interface Props {
   applyPreset: (p: PresetId) => void;
 }
 
-function Section({ title, children, open = true }: { title: string; children: ReactNode; open?: boolean }) {
-  return (
-    <details open={open} className="group border-b border-slate-800">
-      <summary className="cursor-pointer select-none px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
-        {title}
-      </summary>
-      <div className="space-y-3 px-4 pb-4">{children}</div>
-    </details>
-  );
-}
+const QUICK_LAYERS: { value: string; label: string }[] = [
+  { value: "o2", label: "Oxygen" },
+  { value: "sst", label: "Sea temp" },
+  { value: "chl_sat", label: "Chlorophyll" },
+  { value: "bathy", label: "Seabed" },
+  { value: "habitat", label: "Habitat" },
+  { value: "none", label: "None" },
+];
 
-function Field({ label, value, children }: { label: string; value?: string; children: ReactNode }) {
-  return (
-    <label className="block text-xs text-slate-300">
-      <span className="mb-1 flex justify-between">
-        <span>{label}</span>
-        {value && <span className="tabular-nums text-slate-400">{value}</span>}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-300">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-cyan-400" />
-      {label}
-    </label>
-  );
-}
-
-const selectCls = "w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100";
-const numCls = "w-20 rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-xs tabular-nums text-slate-100 disabled:opacity-40";
+const fieldSelect =
+  "w-full rounded-md border border-line bg-panel-2 px-2.5 py-2 text-xs text-ink focus-visible:border-accent";
 
 export default function Controls({ bundle, settings, update, criteria, patchCriterion, preset, applyPreset }: Props) {
   const { meta } = bundle;
   const layerVar = meta.vars[settings.layer];
   const depthMatters = settings.layer === "habitat" || layerVar?.depth;
+  const activeCount = Object.values(criteria).filter((c) => c.enabled).length;
+
   const sourceGroups = Object.entries(
     Object.entries(meta.vars).reduce<Record<string, [string, (typeof meta.vars)[string]][]>>((acc, e) => {
       (acc[e[1].source] ??= []).push(e);
@@ -63,35 +43,56 @@ export default function Controls({ bundle, settings, update, criteria, patchCrit
 
   return (
     <div>
-      <Section title="Time and depth">
-        <Field label="Month" value={meta.months[settings.t]}>
-          <input
-            type="range"
-            min={0}
-            max={meta.months.length - 1}
-            value={settings.t}
-            onChange={(e) => update({ t: Number(e.target.value) })}
-            className="w-full accent-cyan-400"
-          />
-        </Field>
-        <Field label="Depth" value={`${meta.depths[settings.d]} m${depthMatters ? "" : " (layer is 2-D)"}`}>
-          <input
-            type="range"
-            min={0}
-            max={meta.depths.length - 1}
-            value={settings.d}
-            onChange={(e) => update({ d: Number(e.target.value) })}
-            className="w-full accent-cyan-400"
-          />
-        </Field>
-        <p className="text-[11px] leading-snug text-slate-500">
-          Oxygen drops sharply with depth in the Arabian Sea and Bay of Bengal. Move the depth slider to see where water becomes unlivable.
+      <Section title="Time and depth" icon={<Clock className="size-4" />}>
+        <RangeField
+          label="Month"
+          display={meta.months[settings.t]}
+          value={settings.t}
+          min={0}
+          max={meta.months.length - 1}
+          onChange={(t) => update({ t })}
+        />
+        <RangeField
+          label="Depth"
+          display={`${meta.depths[settings.d]} m`}
+          value={settings.d}
+          min={0}
+          max={meta.depths.length - 1}
+          onChange={(d) => update({ d })}
+        />
+        <p className="text-[11px] leading-relaxed text-ink-3">
+          {depthMatters
+            ? "Oxygen drops sharply with depth in the Arabian Sea and Bay of Bengal. Slide deeper to see where water becomes unlivable."
+            : "This layer has no depth axis, so the depth slider only affects the habitat score and the charts."}
         </p>
       </Section>
 
-      <Section title="Environment layer">
-        <Field label="Layer">
-          <select value={settings.layer} onChange={(e) => update({ layer: e.target.value })} className={selectCls}>
+      <Section title="Environment layer" icon={<Stack className="size-4" />}>
+        <div role="radiogroup" aria-label="Quick layer" className="grid grid-cols-3 gap-1.5">
+          {QUICK_LAYERS.map((q) => {
+            const active = settings.layer === q.value;
+            return (
+              <button
+                key={q.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => update({ layer: q.value })}
+                className={`rounded-md border px-2 py-1.5 text-xs transition-colors ${
+                  active
+                    ? "border-accent/60 bg-accent/15 font-medium text-accent"
+                    : "border-line text-ink-2 hover:bg-white/[.05] hover:text-ink"
+                }`}
+              >
+                {q.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <label className="block text-xs text-ink-2">
+          <span className="mb-2 block">All layers</span>
+          <select value={settings.layer} onChange={(e) => update({ layer: e.target.value })} className={fieldSelect}>
             <option value="none">None</option>
             <option value="habitat">Habitat suitability (from criteria)</option>
             {sourceGroups.map(([source, entries]) => (
@@ -100,150 +101,177 @@ export default function Controls({ bundle, settings, update, criteria, patchCrit
                   <option key={k} value={k}>
                     {v.label}
                     {v.unit ? ` (${v.unit})` : ""}
-                    {v.depth ? "" : v.static ? " · static" : " · surface only"}
+                    {v.depth ? "" : v.static ? " - static" : " - surface only"}
                   </option>
                 ))}
               </optgroup>
             ))}
           </select>
-        </Field>
-        <Field label="Opacity" value={`${Math.round(settings.opacity * 100)}%`}>
-          <input
-            type="range"
-            min={0.1}
-            max={1}
-            step={0.05}
-            value={settings.opacity}
-            onChange={(e) => update({ opacity: Number(e.target.value) })}
-            className="w-full accent-cyan-400"
-          />
-        </Field>
+        </label>
+
         {layerVar && (
-          <p className="text-[11px] text-slate-500">
-            {layerVar.source} · native resolution {resolutionLabel(layerVar.grid)}
+          <p className="text-[11px] leading-relaxed text-ink-3">
+            {layerVar.source}, native resolution <span className="num">{resolutionLabel(layerVar.grid)}</span>
           </p>
         )}
+
+        <RangeField
+          label="Opacity"
+          display={`${Math.round(settings.opacity * 100)}%`}
+          value={settings.opacity}
+          min={0.1}
+          max={1}
+          step={0.05}
+          onChange={(opacity) => update({ opacity })}
+        />
+
         {layerVar && (
-          <div className="space-y-2">
-            <div className="flex gap-3">
-              <Check label="Auto colour range" checked={settings.rangeMode === "auto"} onChange={(v) => update({ rangeMode: v ? "auto" : "manual", range: [layerVar.p02, layerVar.p98] })} />
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <input
-                type="number"
-                className={numCls}
+          <div className="space-y-2.5">
+            <Switch
+              label="Automatic colour range"
+              checked={settings.rangeMode === "auto"}
+              onChange={(v) => update({ rangeMode: v ? "auto" : "manual", range: [layerVar.p02, layerVar.p98] })}
+              hint="Auto clips to the 2nd to 98th percentile so outliers do not wash out the map."
+            />
+            <div className="flex gap-2">
+              <NumberField
+                prefix="min"
+                ariaLabel="Colour range minimum"
                 disabled={settings.rangeMode === "auto"}
+                step={(layerVar.p98 - layerVar.p02) / 50 || 0.1}
                 value={settings.rangeMode === "auto" ? Number(fmt(layerVar.p02, 3)) : settings.range[0]}
-                step={(layerVar.p98 - layerVar.p02) / 50 || 0.1}
-                onChange={(e) => update({ range: [Number(e.target.value), settings.range[1]] })}
+                onChange={(v) => v != null && update({ range: [v, settings.range[1]] })}
               />
-              <span>to</span>
-              <input
-                type="number"
-                className={numCls}
+              <NumberField
+                prefix="max"
+                ariaLabel="Colour range maximum"
                 disabled={settings.rangeMode === "auto"}
-                value={settings.rangeMode === "auto" ? Number(fmt(layerVar.p98, 3)) : settings.range[1]}
                 step={(layerVar.p98 - layerVar.p02) / 50 || 0.1}
-                onChange={(e) => update({ range: [settings.range[0], Number(e.target.value)] })}
+                value={settings.rangeMode === "auto" ? Number(fmt(layerVar.p98, 3)) : settings.range[1]}
+                onChange={(v) => v != null && update({ range: [settings.range[0], v] })}
               />
-              <span>{layerVar.unit}</span>
             </div>
           </div>
         )}
       </Section>
 
-      <Section title="Fishing effort">
-        <Check label="Show fishing effort" checked={settings.showFishing} onChange={(v) => update({ showFishing: v })} />
-        <Field label="Effort measure">
-          <select value={settings.metric} onChange={(e) => update({ metric: e.target.value as Metric })} className={selectCls}>
-            <option value="fishing">All fishing hours</option>
-            <option value="longline">Longline hours</option>
-          </select>
-        </Field>
-        <Field label="Time window">
-          <select value={settings.timeMode} onChange={(e) => update({ timeMode: e.target.value as TimeMode })} className={selectCls}>
-            <option value="month">Selected month only</option>
-            <option value="cumulative">Cumulative up to selected month</option>
-            <option value="all">All months combined</option>
-          </select>
-        </Field>
-        <Field label="Marker size" value={`${settings.radius}×`}>
-          <input
-            type="range"
-            min={1}
-            max={10}
-            step={0.5}
-            value={settings.radius}
-            onChange={(e) => update({ radius: Number(e.target.value) })}
-            className="w-full accent-cyan-400"
-          />
-        </Field>
-        <Check label="Show zero-effort cells (grey)" checked={settings.showZero} onChange={(v) => update({ showZero: v })} />
-        <Check label="Ring points that fall on land (red)" checked={settings.flagLand} onChange={(v) => update({ flagLand: v })} />
+      <Section title="Fishing effort" icon={<FishSimple className="size-4" />}>
+        <Switch label="Show fishing effort" checked={settings.showFishing} onChange={(v) => update({ showFishing: v })} />
+        <Segmented<Metric>
+          label="Effort measure"
+          value={settings.metric}
+          onChange={(metric) => update({ metric })}
+          options={[
+            { value: "fishing", label: "All fishing" },
+            { value: "longline", label: "Longline" },
+          ]}
+        />
+        <Segmented<TimeMode>
+          label="Time window"
+          value={settings.timeMode}
+          onChange={(timeMode) => update({ timeMode })}
+          options={[
+            { value: "month", label: "Month", title: "Selected month only" },
+            { value: "cumulative", label: "To date", title: "Cumulative up to the selected month" },
+            { value: "all", label: "All", title: "All months combined" },
+          ]}
+        />
+        <RangeField
+          label="Marker size"
+          display={`${settings.radius}x`}
+          value={settings.radius}
+          min={1}
+          max={10}
+          step={0.5}
+          onChange={(radius) => update({ radius })}
+        />
+        <Switch
+          label="Show zero-effort cells"
+          hint="Grey dots where the file records no fishing."
+          checked={settings.showZero}
+          onChange={(v) => update({ showZero: v })}
+        />
+        <Switch
+          label="Ring points on land"
+          hint="Red ring where a record falls on land in the GEBCO coastline."
+          checked={settings.flagLand}
+          onChange={(v) => update({ flagLand: v })}
+        />
       </Section>
 
-      <Section title="Habitat criteria">
-        <div className="flex gap-1.5">
-          {(Object.keys(PRESET_LABELS) as PresetId[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => applyPreset(p)}
-              className={`flex-1 rounded border px-2 py-1 text-xs ${preset === p ? "border-cyan-500 bg-cyan-500/15 text-cyan-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}
-            >
-              {PRESET_LABELS[p]}
-            </button>
-          ))}
-        </div>
-        <p className="text-[11px] leading-snug text-slate-500">
-          No target species: these are generic limits for tropical marine fish. Tick the conditions a cell must meet, then tune the numbers.
+      <Section
+        title="Habitat criteria"
+        icon={<Funnel className="size-4" />}
+        badge={<Chip tone={activeCount ? "info" : "neutral"}>{activeCount} active</Chip>}
+      >
+        <Segmented<PresetId>
+          label="Preset"
+          value={preset}
+          onChange={applyPreset}
+          options={(Object.keys(PRESET_LABELS) as PresetId[]).map((p) => ({ value: p, label: PRESET_LABELS[p] }))}
+        />
+        <p className="text-[11px] leading-relaxed text-ink-3">
+          No target species. These are generic limits for tropical marine fish: switch on the conditions a cell must meet, then tune the numbers.
         </p>
         <div className="space-y-2.5">
           {CRITERION_ORDER.map((key) => {
             const c = criteria[key];
-            const step = c.step;
             return (
-              <div key={key} className="rounded border border-slate-800 p-2" title={c.hint}>
-                <Check label={`${c.label}${c.unit ? ` (${c.unit})` : ""}`} checked={c.enabled} onChange={(v) => patchCriterion(key, { enabled: v })} />
-                <div className="mt-1.5 flex items-center gap-2 pl-6 text-xs text-slate-400">
-                  {c.hasMin && (
-                    <>
-                      <span>min</span>
-                      <input
-                        type="number"
-                        className={numCls}
-                        disabled={!c.enabled}
-                        step={step}
-                        value={c.min ?? ""}
-                        onChange={(e) => patchCriterion(key, { min: e.target.value === "" ? null : Number(e.target.value) })}
+              <div
+                key={key}
+                className={`rounded-lg border p-3 transition-colors ${c.enabled ? "border-accent/30 bg-accent/[.04]" : "border-line"}`}
+              >
+                <Switch
+                  label={c.label}
+                  hint={c.hint}
+                  checked={c.enabled}
+                  onChange={(v) => patchCriterion(key, { enabled: v })}
+                />
+                {c.enabled && (
+                  <div className="mt-3 flex gap-2 pl-11">
+                    {c.hasMin && (
+                      <NumberField
+                        prefix="min"
+                        ariaLabel={`${c.label} minimum`}
+                        step={c.step}
+                        value={c.min}
+                        unit={c.unit}
+                        onChange={(v) => patchCriterion(key, { min: v })}
                       />
-                    </>
-                  )}
-                  {c.hasMax && (
-                    <>
-                      <span>max</span>
-                      <input
-                        type="number"
-                        className={numCls}
-                        disabled={!c.enabled}
-                        step={step}
-                        value={c.max ?? ""}
-                        onChange={(e) => patchCriterion(key, { max: e.target.value === "" ? null : Number(e.target.value) })}
+                    )}
+                    {c.hasMax && (
+                      <NumberField
+                        prefix="max"
+                        ariaLabel={`${c.label} maximum`}
+                        step={c.step}
+                        value={c.max}
+                        unit={c.unit}
+                        onChange={(v) => patchCriterion(key, { max: v })}
                       />
-                    </>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-        <button
-          type="button"
-          onClick={() => update({ layer: "habitat" })}
-          className="w-full rounded bg-slate-800 px-2 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
-        >
-          Show habitat suitability on map
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => update({ layer: "habitat" })}
+            className="flex-1 rounded-md bg-accent px-3 py-2 text-xs font-medium text-accent-ink hover:brightness-110"
+          >
+            Show habitat on map
+          </button>
+          <button
+            type="button"
+            onClick={() => applyPreset(preset)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-2 text-xs text-ink-2 hover:bg-white/[.06] hover:text-ink"
+          >
+            <ArrowCounterClockwise className="size-3.5" aria-hidden />
+            Reset
+          </button>
+        </div>
       </Section>
     </div>
   );

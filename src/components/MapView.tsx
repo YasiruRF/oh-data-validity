@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { CrosshairSimple } from "@phosphor-icons/react";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { BitmapLayer, ScatterplotLayer } from "@deck.gl/layers";
 import type { Layer } from "@deck.gl/core";
@@ -90,8 +91,18 @@ export default function MapView({ bundle, settings, criteria, inspect, onInspect
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     const overlay = new MapboxOverlay({ interleaved: false, layers: [] });
     map.addControl(overlay as unknown as maplibregl.IControl);
-    map.on("mousemove", (e) => cbRef.current.onHover({ lat: e.lngLat.lat, lon: e.lngLat.lng }));
-    map.on("mouseout", () => cbRef.current.onHover(null));
+    // Report hover only when the pointer moves into a new 0.05 degree cell, not on every pixel.
+    let lastCell = "";
+    map.on("mousemove", (e) => {
+      const cell = `${Math.round(e.lngLat.lat * 20)},${Math.round(e.lngLat.lng * 20)}`;
+      if (cell === lastCell) return;
+      lastCell = cell;
+      cbRef.current.onHover({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+    });
+    map.on("mouseout", () => {
+      lastCell = "";
+      cbRef.current.onHover(null);
+    });
     map.on("click", (e) => cbRef.current.onInspect({ lat: e.lngLat.lat, lon: e.lngLat.lng }));
     mapRef.current = map;
     overlayRef.current = overlay;
@@ -242,7 +253,14 @@ export default function MapView({ bundle, settings, criteria, inspect, onInspect
         if (!p || p.fishing === undefined) return null;
         return {
           text: `${p.lat.toFixed(2)}°N ${p.lon.toFixed(2)}°E\nFishing ${fmt(p.fishing)} h\nLongline ${fmt(p.longline)} h${p.land ? "\nFlagged: on land" : ""}`,
-          style: { background: "#0f172a", color: "#e2e8f0", fontSize: "12px", border: "1px solid #334155" },
+          style: {
+            background: "#0d1424",
+            color: "#e6edf7",
+            fontSize: "12px",
+            border: "1px solid rgba(148,163,184,0.28)",
+            borderRadius: "8px",
+            padding: "8px 10px",
+          },
         };
       },
     });
@@ -251,33 +269,91 @@ export default function MapView({ bundle, settings, criteria, inspect, onInspect
   const meta = settings.layer === "habitat" ? null : bundle.meta.vars[settings.layer];
   const ramp = RAMPS[VAR_RAMP[settings.layer] ?? "viridis"];
 
+  const layerName = settings.layer === "habitat" ? "Habitat suitability" : meta?.label;
+  const showDepth = meta?.depth || settings.layer === "habitat";
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) =>
+    settings.layer === "habitat" ? `${Math.round(f * 100)}%` : fmt(lo + (hi - lo) * f),
+  );
+  const effortColor = settings.metric === "fishing" ? "#ff7a1a" : "#ec4899";
+  const sizeKey = [1, 10, 100].map((h) => ({
+    h,
+    d: 2 * Math.min(70, Math.max(4, Math.sqrt(h) * settings.radius)),
+  }));
+
+  const resetView = () => mapRef.current?.flyTo({ center: [81.0, 7.6], zoom: 6.1, duration: 700 });
+
   return (
     <div className="relative h-full w-full">
-      <div className="absolute inset-0">
+      {/* isolate: the map and its deck.gl canvas get their own stacking context, so overlays always paint above */}
+      <div className="absolute inset-0 isolate">
         <div ref={box} className="h-full w-full" />
       </div>
-      <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-slate-950/80 px-3 py-1.5 text-xs text-slate-300 backdrop-blur">
-        {monthLabel(bundle.meta.months[settings.t])}
-        {meta?.depth || settings.layer === "habitat" ? ` · ${bundle.meta.depths[settings.d]} m` : ""}
-        {meta?.static ? " · static" : ""}
+
+      <div className="pointer-events-none absolute top-3 left-3 z-10 flex max-w-[calc(100%-6rem)] flex-wrap gap-1.5">
+        <span className="num rounded-full border border-line bg-panel px-3 py-1 text-xs font-medium text-ink">
+          {monthLabel(bundle.meta.months[settings.t])}
+        </span>
+        {showDepth && (
+          <span className="num rounded-full border border-line bg-panel px-3 py-1 text-xs text-ink-2">
+            {bundle.meta.depths[settings.d]} m
+          </span>
+        )}
+        {layerName && settings.layer !== "none" && (
+          <span className="rounded-full border border-line bg-panel px-3 py-1 text-xs text-ink-2">
+            {layerName}
+          </span>
+        )}
       </div>
-      {settings.layer !== "none" && (
-        <div className="pointer-events-none absolute bottom-6 left-3 w-60 rounded-md bg-slate-950/85 p-2.5 text-xs text-slate-300 backdrop-blur">
-          <div className="mb-1 font-medium">
-            {settings.layer === "habitat" ? "Habitat criteria met" : `${meta?.label} (${meta?.unit || "-"})`}
-          </div>
-          {envGrid && (
-            <div className="mb-1 text-[10px] text-slate-500">
-              {meta?.source ?? "Dashboard criteria"} · {resolutionLabel(envGrid)}
+
+      <button
+        type="button"
+        onClick={resetView}
+        aria-label="Recentre map on Sri Lanka"
+        title="Recentre map on Sri Lanka"
+        className="absolute top-[84px] right-[10px] z-10 inline-flex size-[29px] items-center justify-center rounded-lg border border-line bg-panel text-ink-2 hover:text-ink"
+      >
+        <CrosshairSimple className="size-4" aria-hidden />
+      </button>
+
+      <div className="pointer-events-none absolute bottom-6 left-3 z-10 flex w-64 flex-col gap-2.5 rounded-lg border border-line bg-panel p-3 text-xs text-ink-2">
+        {settings.layer !== "none" && (
+          <div>
+            <div className="mb-0.5 font-medium text-ink">
+              {layerName}
+              {meta?.unit ? <span className="font-normal text-ink-3"> ({meta.unit})</span> : null}
             </div>
-          )}
-          <div className="h-2.5 rounded" style={{ background: rampCss(ramp) }} />
-          <div className="mt-1 flex justify-between tabular-nums">
-            <span>{settings.layer === "habitat" ? "0%" : fmt(lo)}</span>
-            <span>{settings.layer === "habitat" ? "100%" : fmt(hi)}</span>
+            {envGrid && (
+              <div className="mb-2 text-[10px] text-ink-3">
+                {meta?.source ?? "Dashboard criteria"}, <span className="num">{resolutionLabel(envGrid)}</span>
+              </div>
+            )}
+            <div className="h-2.5 rounded-sm" style={{ background: rampCss(ramp) }} />
+            <div className="num mt-1.5 flex justify-between text-[10px] text-ink-3">
+              {ticks.map((t, i) => (
+                <span key={i}>{t}</span>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+        {settings.showFishing && (
+          <div className={settings.layer !== "none" ? "border-t border-line pt-2.5" : ""}>
+            <div className="mb-1.5 font-medium text-ink">
+              {settings.metric === "fishing" ? "Fishing hours" : "Longline hours"}
+            </div>
+            <div className="flex items-end gap-4">
+              {sizeKey.map((s) => (
+                <div key={s.h} className="flex flex-col items-center gap-1">
+                  <span
+                    className="block rounded-full border border-white/80"
+                    style={{ width: s.d, height: s.d, background: effortColor }}
+                  />
+                  <span className="num text-[10px] text-ink-3">{s.h} h</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

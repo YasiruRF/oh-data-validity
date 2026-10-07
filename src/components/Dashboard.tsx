@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CaretLeft, CaretRight, FishSimple, Pause, Play, SidebarSimple } from "@phosphor-icons/react";
 import MapView, { LatLon } from "./MapView";
 import Controls from "./Controls";
 import Insights from "./Insights";
+import { Callout, Chip, IconButton } from "./ui";
 import { DataBundle, loadData, monthLabel } from "@/lib/data";
 import { Criterion, Criteria, Metric, PresetId, makeCriteria, monthlyEffort } from "@/lib/habitat";
 
@@ -44,6 +46,41 @@ function initialSettings(b: DataBundle): Settings {
   };
 }
 
+function Skeleton() {
+  const bar = "rounded-md bg-white/[.06] motion-safe:animate-pulse";
+  return (
+    <div className="flex h-dvh flex-col bg-bg" role="status" aria-label="Loading ocean data">
+      <div className="flex h-14 items-center gap-3 border-b border-line bg-panel px-4">
+        <div className={`${bar} size-8`} />
+        <div className={`${bar} h-4 w-56`} />
+      </div>
+      <div className="flex min-h-0 flex-1">
+        <div className="hidden w-[22rem] space-y-4 border-r border-line bg-panel p-4 lg:block">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="space-y-2.5">
+              <div className={`${bar} h-4 w-32`} />
+              <div className={`${bar} h-9 w-full`} />
+              <div className={`${bar} h-9 w-full`} />
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-1 items-center justify-center text-sm text-ink-3">Loading ocean data</div>
+        <div className="hidden w-[26rem] space-y-3 border-l border-line bg-panel p-4 lg:block">
+          <div className={`${bar} h-9 w-full`} />
+          <div className="grid grid-cols-3 gap-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className={`${bar} h-16`} />
+            ))}
+          </div>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className={`${bar} h-16 w-full`} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [bundle, setBundle] = useState<DataBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,21 +97,22 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-slate-950 p-8 text-slate-200">
-        <div className="max-w-md space-y-2 text-sm">
-          <h1 className="text-lg font-semibold text-red-300">Dashboard data not found</h1>
-          <p>{error}</p>
-          <p className="text-slate-400">
-            Generate it with <code className="rounded bg-slate-800 px-1">npm run data:fetch</code> then{" "}
-            <code className="rounded bg-slate-800 px-1">npm run data:build</code>.
+      <div className="flex h-dvh items-center justify-center bg-bg p-6">
+        <div className="max-w-md space-y-3">
+          <Callout tone="bad">
+            <p className="font-medium">The dashboard data could not be loaded.</p>
+            <p className="num mt-1 text-ink-2">{error}</p>
+          </Callout>
+          <p className="text-xs leading-relaxed text-ink-3">
+            Generate it with <code className="num rounded bg-white/[.08] px-1.5 py-0.5 text-ink-2">npm run data:fetch</code>,{" "}
+            <code className="num rounded bg-white/[.08] px-1.5 py-0.5 text-ink-2">npm run data:fetch:sat</code>, then{" "}
+            <code className="num rounded bg-white/[.08] px-1.5 py-0.5 text-ink-2">npm run data:build</code>.
           </p>
         </div>
       </div>
     );
   }
-  if (!bundle) {
-    return <div className="flex h-dvh items-center justify-center bg-slate-950 text-slate-400">Loading ocean data…</div>;
-  }
+  if (!bundle) return <Skeleton />;
   return <Workspace bundle={bundle} />;
 }
 
@@ -85,17 +123,24 @@ function Workspace({ bundle }: { bundle: DataBundle }) {
   const [inspect, setInspect] = useState<LatLon | null>(null);
   const [hover, setHover] = useState<LatLon | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
 
-  const update = useCallback((patch: Partial<Settings>) => {
-    setSettings((s) => {
-      const next = { ...s, ...patch };
-      if (patch.layer && patch.layer !== s.layer) {
-        const v = bundle.meta.vars[patch.layer];
-        if (v) next.range = [v.p02, v.p98];
-      }
-      return next;
-    });
-  }, [bundle.meta.vars]);
+  const nm = bundle.meta.months.length;
+
+  const update = useCallback(
+    (patch: Partial<Settings>) => {
+      setSettings((s) => {
+        const next = { ...s, ...patch };
+        if (patch.layer && patch.layer !== s.layer) {
+          const v = bundle.meta.vars[patch.layer];
+          if (v) next.range = [v.p02, v.p98];
+        }
+        return next;
+      });
+    },
+    [bundle.meta.vars],
+  );
 
   const patchCriterion = useCallback((key: string, patch: Partial<Criterion>) => {
     setCriteria((c) => ({ ...c, [key]: { ...c[key], ...patch } }));
@@ -106,37 +151,84 @@ function Workspace({ bundle }: { bundle: DataBundle }) {
     setCriteria(makeCriteria(p));
   }, []);
 
-  const nm = bundle.meta.months.length;
+  const step = useCallback((delta: number) => setSettings((s) => ({ ...s, t: (s.t + delta + nm) % nm })), [nm]);
+
   useEffect(() => {
     if (!playing) return;
-    const id = setInterval(() => setSettings((s) => ({ ...s, t: (s.t + 1) % nm })), 900);
+    const id = setInterval(() => step(1), 900);
     return () => clearInterval(id);
-  }, [playing, nm]);
+  }, [playing, step]);
+
+  // left and right arrow keys step through months unless the user is typing or using a slider
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA")) return;
+      if (e.key === "ArrowLeft") step(-1);
+      if (e.key === "ArrowRight") step(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [step]);
 
   const effort = useMemo(() => monthlyEffort(bundle, settings.metric), [bundle, settings.metric]);
   const maxEffort = Math.max(...effort, 1e-9);
+  const yearMarks = useMemo(
+    () =>
+      bundle.meta.months
+        .map((m, i) => ({ year: m.slice(0, 4), i }))
+        .filter((m, idx, arr) => idx === 0 || arr[idx - 1].year !== m.year),
+    [bundle.meta.months],
+  );
+  const v = bundle.verification;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-slate-950 text-slate-100 lg:h-dvh">
-      <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-slate-800 px-4 py-2.5">
-        <h1 className="text-base font-semibold tracking-tight">Sri Lanka fishing-effort verification</h1>
-        <p className="text-xs text-slate-400">
-          Fishing_sl.csv overlaid on Copernicus Marine oxygen, temperature, salinity, chlorophyll and more · {bundle.verification.rows} rows ·{" "}
-          {monthLabel(bundle.verification.monthRange[0])} – {monthLabel(bundle.verification.monthRange[1])}
-        </p>
+    <div className="flex min-h-dvh flex-col bg-bg text-ink lg:h-dvh">
+      <header className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-panel px-4 py-2">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex size-8 items-center justify-center rounded-md bg-accent/15 text-accent" aria-hidden>
+            <FishSimple className="size-[18px]" weight="fill" />
+          </span>
+          <div>
+            <h1 className="text-sm leading-tight font-semibold tracking-tight">Sri Lanka fishing verification</h1>
+            <p className="text-xs leading-tight text-ink-3">Fishing effort checked against ocean conditions</p>
+          </div>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Chip title="Rows in Fishing_sl.csv">
+            <span className="num">{v.rows}</span> rows
+          </Chip>
+          <Chip tone={v.nonZeroRows < 30 ? "warn" : "neutral"} title="Rows with any fishing hours">
+            <span className="num">{v.nonZeroRows}</span> with effort
+          </Chip>
+          <Chip>
+            {monthLabel(v.monthRange[0])} to {monthLabel(v.monthRange[1])}
+          </Chip>
+          <span className="mx-1 hidden h-5 w-px bg-line lg:block" />
+          <IconButton label={leftOpen ? "Hide settings panel" : "Show settings panel"} active={leftOpen} onClick={() => setLeftOpen((o) => !o)}>
+            <SidebarSimple className="size-4" aria-hidden />
+          </IconButton>
+          <IconButton label={rightOpen ? "Hide results panel" : "Show results panel"} active={rightOpen} onClick={() => setRightOpen((o) => !o)}>
+            <SidebarSimple className="size-4 -scale-x-100" aria-hidden />
+          </IconButton>
+        </div>
       </header>
+
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <aside className="w-full shrink-0 overflow-y-auto border-slate-800 lg:w-80 lg:border-r">
-          <Controls
-            bundle={bundle}
-            settings={settings}
-            update={update}
-            criteria={criteria}
-            patchCriterion={patchCriterion}
-            preset={preset}
-            applyPreset={applyPreset}
-          />
-        </aside>
+        {leftOpen && (
+          <aside className="scroll-thin w-full shrink-0 overflow-y-auto border-line bg-panel lg:w-[22rem] lg:border-r">
+            <Controls
+              bundle={bundle}
+              settings={settings}
+              update={update}
+              criteria={criteria}
+              patchCriterion={patchCriterion}
+              preset={preset}
+              applyPreset={applyPreset}
+            />
+          </aside>
+        )}
+
         <main className="flex min-h-[70vh] min-w-0 flex-1 flex-col lg:min-h-0">
           <div className="relative min-h-0 flex-1">
             <MapView
@@ -148,48 +240,81 @@ function Workspace({ bundle }: { bundle: DataBundle }) {
               onHover={setHover}
             />
           </div>
-          <div className="flex items-center gap-3 border-t border-slate-800 bg-slate-900 px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setPlaying((p) => !p)}
-              className="w-16 rounded bg-cyan-600 px-2 py-1 text-xs font-medium text-white hover:bg-cyan-500"
-            >
-              {playing ? "Pause" : "Play"}
-            </button>
-            <div className="min-w-0 flex-1">
-              <div className="flex h-8 items-end gap-px">
-                {effort.map((e, i) => (
-                  <div
-                    key={bundle.meta.months[i]}
-                    className={`flex-1 rounded-t-sm ${i === settings.t ? "bg-cyan-400" : e > 0 ? "bg-orange-500/70" : "bg-slate-700"}`}
-                    style={{ height: `${Math.max(8, (e / maxEffort) * 100)}%` }}
-                    title={`${monthLabel(bundle.meta.months[i])}: ${e.toFixed(1)} h`}
-                  />
-                ))}
+
+          <div className="border-t border-line bg-panel px-4 pt-3 pb-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <IconButton label="Previous month (left arrow)" onClick={() => step(-1)}>
+                  <CaretLeft className="size-4" aria-hidden />
+                </IconButton>
+                <button
+                  type="button"
+                  onClick={() => setPlaying((p) => !p)}
+                  aria-label={playing ? "Pause animation" : "Play through months"}
+                  className="inline-flex h-8 w-[4.5rem] items-center justify-center gap-1.5 rounded-md bg-accent text-xs font-medium text-accent-ink hover:brightness-110"
+                >
+                  {playing ? <Pause weight="fill" className="size-3.5" aria-hidden /> : <Play weight="fill" className="size-3.5" aria-hidden />}
+                  {playing ? "Pause" : "Play"}
+                </button>
+                <IconButton label="Next month (right arrow)" onClick={() => step(1)}>
+                  <CaretRight className="size-4" aria-hidden />
+                </IconButton>
               </div>
-              <input
-                type="range"
-                min={0}
-                max={nm - 1}
-                value={settings.t}
-                onChange={(e) => update({ t: Number(e.target.value) })}
-                className="w-full accent-cyan-400"
-                aria-label="Month"
-              />
+
+              <div className="min-w-0 flex-1">
+                <div className="flex h-9 items-end gap-px" role="group" aria-label="Fishing effort by month, select a month">
+                  {effort.map((e, i) => {
+                    const active = i === settings.t;
+                    return (
+                      <button
+                        key={bundle.meta.months[i]}
+                        type="button"
+                        aria-label={`${monthLabel(bundle.meta.months[i])}: ${e.toFixed(1)} hours`}
+                        aria-current={active}
+                        title={`${monthLabel(bundle.meta.months[i])}: ${e.toFixed(1)} h`}
+                        onClick={() => update({ t: i })}
+                        className="group flex h-full flex-1 items-end"
+                      >
+                        <span
+                          className={`block w-full rounded-t-sm transition-colors ${
+                            active ? "bg-accent" : e > 0 ? "bg-effort/70 group-hover:bg-effort" : "bg-white/[.14] group-hover:bg-white/30"
+                          }`}
+                          style={{ height: `${Math.max(10, (e / maxEffort) * 100)}%` }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="relative mt-1 h-4">
+                  {yearMarks.map((m) => (
+                    <span
+                      key={m.year}
+                      className="num absolute top-0 text-[10px] text-ink-3"
+                      style={{ left: `${(m.i / nm) * 100}%` }}
+                    >
+                      {m.year}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="num w-20 shrink-0 text-right text-sm font-medium">{monthLabel(bundle.meta.months[settings.t])}</div>
             </div>
-            <div className="w-20 text-right text-xs tabular-nums text-slate-300">{monthLabel(bundle.meta.months[settings.t])}</div>
           </div>
         </main>
-        <aside className="w-full shrink-0 overflow-y-auto border-slate-800 lg:w-[26rem] lg:border-l">
-          <Insights
-            bundle={bundle}
-            settings={settings}
-            criteria={criteria}
-            point={inspect ?? hover}
-            pinned={inspect != null}
-            onClearPin={() => setInspect(null)}
-          />
-        </aside>
+
+        {rightOpen && (
+          <aside className="scroll-thin w-full shrink-0 overflow-y-auto border-line bg-panel lg:w-[26rem] lg:border-l">
+            <Insights
+              bundle={bundle}
+              settings={settings}
+              criteria={criteria}
+              point={inspect ?? hover}
+              pinned={inspect != null}
+              onClearPin={() => setInspect(null)}
+            />
+          </aside>
+        )}
       </div>
     </div>
   );

@@ -72,15 +72,15 @@ const PRESETS: Record<PresetId, Record<string, PresetValue>> = {
 };
 
 const DEFS: Omit<Criterion, "enabled" | "min" | "max">[] = [
-  { key: "o2", label: "Dissolved oxygen", unit: "mmol/m³", hasMin: true, hasMax: false, step: 5, hint: "Below ~60 is hypoxic for most fish; pelagic fish avoid roughly <100–150." },
-  { key: "temp", label: "Temperature at depth", unit: "°C", hasMin: true, hasMax: true, step: 0.5, hint: "Copernicus model temperature at the selected depth. Most tropical pelagic fish sit within ~22–31 °C." },
-  { key: "sst", label: "Sea-surface temperature (satellite)", unit: "°C", hasMin: true, hasMax: true, step: 0.5, hint: "1–4 km satellite surface temperature. Independent of the depth slider." },
-  { key: "sal", label: "Salinity", unit: "PSU", hasMin: true, hasMax: true, step: 0.1, hint: "Open-ocean fish tolerate roughly 33–36.5; low values flag river or monsoon plumes." },
+  { key: "o2", label: "Dissolved oxygen", unit: "mmol/m³", hasMin: true, hasMax: false, step: 5, hint: "Below about 60 is hypoxic for most fish; pelagic fish avoid roughly under 100 to 150." },
+  { key: "temp", label: "Temperature at depth", unit: "°C", hasMin: true, hasMax: true, step: 0.5, hint: "Copernicus model temperature at the selected depth. Most tropical pelagic fish sit within about 22 to 31 °C." },
+  { key: "sst", label: "Sea-surface temperature (satellite)", unit: "°C", hasMin: true, hasMax: true, step: 0.5, hint: "1 to 4 km satellite surface temperature. Independent of the depth slider." },
+  { key: "sal", label: "Salinity", unit: "PSU", hasMin: true, hasMax: true, step: 0.1, hint: "Open-ocean fish tolerate roughly 33 to 36.5; low values flag river or monsoon plumes." },
   { key: "chl_sat", label: "Chlorophyll-a (satellite)", unit: "mg/m³", hasMin: true, hasMax: false, step: 0.01, hint: "4 km satellite chlorophyll: food supply at the base of the food web. Independent of the depth slider." },
   { key: "chl", label: "Chlorophyll-a (model)", unit: "mg/m³", hasMin: true, hasMax: false, step: 0.01, hint: "Coarse model chlorophyll at the selected depth." },
   { key: "kd490", label: "Water clarity Kd490 (satellite)", unit: "1/m", hasMin: false, hasMax: true, step: 0.01, hint: "Higher means murkier water. Very turbid water holds sediment or plumes." },
   { key: "npp", label: "Primary production", unit: "mg C/m³/day", hasMin: true, hasMax: false, step: 1, hint: "How fast the food web is producing biomass." },
-  { key: "ph", label: "pH", unit: "", hasMin: true, hasMax: false, step: 0.05, hint: "Open-ocean pH is ~8.0–8.1; low values flag acidified or upwelled water." },
+  { key: "ph", label: "pH", unit: "", hasMin: true, hasMax: false, step: 0.05, hint: "Open-ocean pH is about 8.0 to 8.1; low values flag acidified or upwelled water." },
   { key: "current", label: "Current speed", unit: "m/s", hasMin: false, hasMax: true, step: 0.1, hint: "Very strong currents make water hard to hold station in." },
   { key: "bathy", label: "Seabed depth (GEBCO)", unit: "m", hasMin: true, hasMax: true, step: 50, hint: "Shelf water is shallower than ~200 m; use min and max to focus on shelf, slope or deep ocean." },
 ];
